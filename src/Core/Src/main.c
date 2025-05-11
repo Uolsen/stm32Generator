@@ -26,6 +26,8 @@
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
 #include "si5351.h"
+#include "screen.h"
+#include "state.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,6 +48,8 @@
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
 
+TIM_HandleTypeDef htim2;
+
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -54,6 +58,7 @@ I2C_HandleTypeDef hi2c1;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -71,6 +76,7 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
   CDC_Transmit_FS("Start", 5);
+  state_s state;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -93,25 +99,28 @@ int main(void)
   MX_GPIO_Init();
   MX_USB_DEVICE_Init();
   MX_I2C1_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-  ssd1306_Init();
+  // ssd1306_Init();
   // ssd1306_TestAll();
-  ssd1306_Fill(Black);
-  ssd1306_SetCursor(0, 0);
-  ssd1306_WriteString("OSCILATOR", Font_7x10, White);
-  ssd1306_UpdateScreen();
+  // ssd1306_Fill(Black);
+  // ssd1306_SetCursor(0, 0);
+  // ssd1306_WriteString("OSCILATOR", Font_7x10, White);
+  // ssd1306_UpdateScreen();
+  state_init(&state);
+  screen_init();
 
   const int32_t correction = 978;
-  si5351_Init(correction);
+  // si5351_Init(correction);
 
   // 28 MHz @ ~7 dBm
-  si5351_SetupCLK0(100000, SI5351_DRIVE_STRENGTH_4MA);
+  // si5351_SetupCLK0(100000, SI5351_DRIVE_STRENGTH_4MA);
 
   // 144 MHz @ ~7 dBm
-  si5351_SetupCLK2(4000000, SI5351_DRIVE_STRENGTH_4MA);
+  // si5351_SetupCLK2(4000000, SI5351_DRIVE_STRENGTH_4MA);
 
   // Enable CLK0 and CLK2
-  si5351_EnableOutputs((1<<0) | (1<<2));
+  // si5351_EnableOutputs((1<<0) | (1<<2));
 
 
 // const int32_t correction = 978;
@@ -157,11 +166,12 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    uint8_t buf[] = "Hello World\n";
-    CDC_Transmit_FS(buf, sizeof(buf) - 1);
+    // uint8_t buf[] = "Hello World\n";
+    // CDC_Transmit_FS(buf, sizeof(buf) - 1);
 
     HAL_Delay(500);
     HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    screen_update(&state);
 
     /* USER CODE END WHILE */
 
@@ -247,6 +257,55 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_Encoder_InitTypeDef sConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 0;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 65535;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
+  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC1Filter = 10;
+  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC2Filter = 10;
+  if (HAL_TIM_Encoder_Init(&htim2, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
 
 }
 
