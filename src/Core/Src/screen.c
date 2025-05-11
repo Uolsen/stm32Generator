@@ -1,6 +1,8 @@
 #include "screen.h"
+#include <stdio.h>
 
 uint8_t screen_page;
+
 
 void screen_init()
 {

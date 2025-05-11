@@ -22,4 +22,6 @@ uint8_t screen_page;
 void screen_init();
 void screen_update(state_s *state);
 
+void gen_screen(uint8_t generator_number, standard_frequency_generator_s *generator);
+
 #endif

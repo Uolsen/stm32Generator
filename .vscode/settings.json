@@ -1,0 +1,6 @@
+{
+	"files.associations": {
+		"*.s": "arm",
+		"ssd1306.h": "c"
+	}
+}
