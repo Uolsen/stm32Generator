@@ -1,20 +1,20 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2025 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -66,6 +66,21 @@ static void MX_TIM2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+uint32_t counter = 0;
+int16_t count = 0;
+int16_t position = 0;
+
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+  counter = __HAL_TIM_GET_COUNTER(htim);
+  if (counter % 4 == 0)
+  {
+    count = (int16_t)counter;
+    position = count / 4;
+    CDC_Transmit_FS((uint8_t *)&position, sizeof(position));
+  }
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -75,7 +90,6 @@ static void MX_TIM2_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-  CDC_Transmit_FS("Start", 5);
   state_s state;
   /* USER CODE END 1 */
 
@@ -101,16 +115,15 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-  // ssd1306_Init();
-  // ssd1306_TestAll();
-  // ssd1306_Fill(Black);
-  // ssd1306_SetCursor(0, 0);
-  // ssd1306_WriteString("OSCILATOR", Font_7x10, White);
-  // ssd1306_UpdateScreen();
+
+  HAL_TIM_Encoder_Start_IT(&htim2, TIM_CHANNEL_ALL);
+
   state_init(&state);
   screen_init();
+  
+  HAL_Delay(3000);
+  CDC_Transmit_FS("Start", 5);
 
-  const int32_t correction = 978;
   // si5351_Init(correction);
 
   // 28 MHz @ ~7 dBm
@@ -122,43 +135,42 @@ int main(void)
   // Enable CLK0 and CLK2
   // si5351_EnableOutputs((1<<0) | (1<<2));
 
+  // const int32_t correction = 978;
+  // si5351_Init(correction);
 
-// const int32_t correction = 978;
-// si5351_Init(correction);
+  // si5351PLLConfig_t pll_conf;
+  // si5351OutputConfig_t out_conf;
+  // int32_t Fclk = 3700000; // 2 MHz
 
-// si5351PLLConfig_t pll_conf;
-// si5351OutputConfig_t out_conf;
-// int32_t Fclk = 3700000; // 2 MHz
+  // si5351_CalcIQ(Fclk, &pll_conf, &out_conf);
 
-// si5351_CalcIQ(Fclk, &pll_conf, &out_conf);
+  /*
+   * `phaseOffset` is a 7bit value, calculated from Fpll, Fclk and desired phase shift.
+   * To get N° phase shift the value should be round( (N/360)*(4*Fpll/Fclk) )
+   * Two channels should use the same PLL to make it work. There are other restrictions.
+   * Please see AN619 for more details.
+   *
+   * si5351_CalcIQ() chooses PLL and MS parameters so that:
+   *   Fclk in [1.4..100] MHz
+   *   out_conf.div in [9..127]
+   *   out_conf.num = 0
+   *   out_conf.denum = 1
+   *   Fpll = out_conf.div * Fclk.
+   * This automatically gives 90° phase shift between two channels if you pass
+   * 0 and out_conf.div as a phaseOffset for these channels.
+   */
+  // uint8_t phaseOffset = (uint8_t)out_conf.div;
+  // si5351_SetupOutput(0, SI5351_PLL_A, SI5351_DRIVE_STRENGTH_4MA, &out_conf, 0);
+  // si5351_SetupOutput(2, SI5351_PLL_A, SI5351_DRIVE_STRENGTH_4MA, &out_conf, phaseOffset);
 
-/*
- * `phaseOffset` is a 7bit value, calculated from Fpll, Fclk and desired phase shift.
- * To get N° phase shift the value should be round( (N/360)*(4*Fpll/Fclk) )
- * Two channels should use the same PLL to make it work. There are other restrictions.
- * Please see AN619 for more details.
- *
- * si5351_CalcIQ() chooses PLL and MS parameters so that:
- *   Fclk in [1.4..100] MHz
- *   out_conf.div in [9..127]
- *   out_conf.num = 0
- *   out_conf.denum = 1
- *   Fpll = out_conf.div * Fclk.
- * This automatically gives 90° phase shift between two channels if you pass
- * 0 and out_conf.div as a phaseOffset for these channels.
- */
-// uint8_t phaseOffset = (uint8_t)out_conf.div;
-// si5351_SetupOutput(0, SI5351_PLL_A, SI5351_DRIVE_STRENGTH_4MA, &out_conf, 0);
-// si5351_SetupOutput(2, SI5351_PLL_A, SI5351_DRIVE_STRENGTH_4MA, &out_conf, phaseOffset);
-
-/*
- * The order is important! Setup the channels first, then setup the PLL.
- * Alternatively you could reset the PLL after setting up PLL and channels.
- * However since _SetupPLL() always resets the PLL this would only cause
- * sending extra I2C commands.
- */
-// si5351_SetupPLL(SI5351_PLL_A, &pll_conf);
-// si5351_EnableOutputs((1<<0) | (1<<2));
+  /*
+   * The order is important! Setup the channels first, then setup the PLL.
+   * Alternatively you could reset the PLL after setting up PLL and channels.
+   * However since _SetupPLL() always resets the PLL this would only cause
+   * sending extra I2C commands.
+   */
+  // si5351_SetupPLL(SI5351_PLL_A, &pll_conf);
+  // si5351_EnableOutputs((1<<0) | (1<<2));
 
   /* USER CODE END 2 */
 
@@ -166,8 +178,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    // uint8_t buf[] = "Hello World\n";
-    // CDC_Transmit_FS(buf, sizeof(buf) - 1);
+    uint8_t buf[] = "Hello World\n";
+    CDC_Transmit_FS(buf, sizeof(buf) - 1);
 
     HAL_Delay(500);
     HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
@@ -199,7 +211,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL6;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -214,12 +226,12 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB;
-  PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL;
+  PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -283,13 +295,13 @@ static void MX_TIM2_Init(void)
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim2.Init.Period = 65535;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
-  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC1Polarity = TIM_ICPOLARITY_FALLING;
   sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
   sConfig.IC1Filter = 10;
-  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC2Polarity = TIM_ICPOLARITY_FALLING;
   sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
   sConfig.IC2Filter = 10;
